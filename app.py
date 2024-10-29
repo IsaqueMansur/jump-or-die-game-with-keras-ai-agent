@@ -67,7 +67,7 @@ class Obstacle:
 
     def reset(self):
         self.x = SCREEN_WIDTH
-        self.velocity = random.randint(4, 10)
+        self.velocity = random.randint(6, 12)
         self.passed_player = False
         self.player_jumped_this = False
 

@@ -15,7 +15,7 @@ class Player:
         self.obstacle = obstacle
         self.width = 50
         self.height = 50
-        self.x = 100
+        self.x = 200
         self.y = SCREEN_HEIGHT - self.height - 10
         self.velocity = 10
         self.is_jumping = False
@@ -24,11 +24,10 @@ class Player:
         self.on_ground = True 
 
     def handle_input(self, keys):
-        if keys[pygame.K_UP] and not self.is_jumping and self.on_ground and not self.obstacle.player_jumped_this:
+        if keys[pygame.K_UP] and not self.is_jumping and self.on_ground:
             self.is_jumping = True
             self.jump_peak = self.y - self.jump_height
             self.on_ground = False 
-            self.obstacle.player_jumped_this = True
 
     def update(self):
         if self.is_jumping:
@@ -57,7 +56,6 @@ class Obstacle:
         self.velocity = random.randint(6, 10)
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.passed_player = False
-        self.player_jumped_this = False
 
     def update(self):
         self.x -= self.velocity
@@ -69,7 +67,6 @@ class Obstacle:
         self.x = SCREEN_WIDTH
         self.velocity = random.randint(6, 12)
         self.passed_player = False
-        self.player_jumped_this = False
 
     def draw(self):
         pygame.draw.rect(screen, (255, 0, 0), self.rect)
@@ -81,26 +78,35 @@ class Game:
         self.player = Player(self.obstacle)
         self.score = 0
         self.clock = pygame.time.Clock()
-        self.game_over = False
 
     def show_text(self, text, x, y):
         render = font.render(text, True, (255, 255, 255))
         screen.blit(render, (x, y))
 
     def reset(self):
-        self.game_over = False
         self.score = 0
         self.player.y = SCREEN_HEIGHT - self.player.height - 10
         self.obstacle.reset()
 
     def check_collision(self):
         if self.player.rect.colliderect(self.obstacle.rect):
-            self.game_over = True
+            print("Colisão")
 
     def check_pass(self):
-        if not self.obstacle.passed_player and (self.obstacle.x + self.obstacle.width) < self.player.x and self.obstacle.player_jumped_this:
+        if not self.obstacle.passed_player and (self.obstacle.x + self.obstacle.width) < self.player.x:
             self.score += 1
             self.obstacle.passed_player = True
+            self.obstacle.reset()
+            
+    def predict_jump_result(self):
+        T = 2 * (self.player.jump_height / self.player.velocity)
+        obstacle_final_x = self.obstacle.x - self.obstacle.velocity * T
+        if self.player.x < obstacle_final_x:
+            return "Pulo à toa"
+        elif self.player.x < obstacle_final_x + self.obstacle.width:
+            return "Colisão"
+        else:
+            return "Sucesso"
 
     def run(self):
         running = True
@@ -111,23 +117,18 @@ class Game:
                     running = False
 
             keys = pygame.key.get_pressed()
-            if not self.game_over:
-                self.player.handle_input(keys)
-                self.player.update()
-                print(self.player.is_jumping)
-                self.obstacle.update()
-                self.check_collision()
-                self.check_pass() 
 
-            else:
-                if keys[pygame.K_r]:
-                    self.reset()
+            if keys[pygame.K_UP]:
+                print(self.predict_jump_result())
+            self.player.handle_input(keys)
+            self.player.update()
+            self.obstacle.update()
+            self.check_collision()
+            self.check_pass() 
 
             self.player.draw()
             self.obstacle.draw()
             self.show_text(f"Pontos: {self.score}", 10, 10)
-            if self.game_over:
-                self.show_text("Fim de Jogo! Pressione R para reiniciar", 200, 200)
 
             pygame.display.flip()
             self.clock.tick(30)

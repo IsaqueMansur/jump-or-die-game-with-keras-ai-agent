@@ -15,7 +15,7 @@ class Player:
         self.obstacle = obstacle
         self.width = 50
         self.height = 50
-        self.x = 200
+        self.x = 100
         self.y = SCREEN_HEIGHT - self.height - 10
         self.velocity = 10
         self.is_jumping = False
@@ -90,10 +90,11 @@ class Game:
 
     def check_collision(self):
         if self.player.rect.colliderect(self.obstacle.rect):
-            print("Colisão")
+            self.obstacle.reset()
+            print("Colisão aconteceu")
 
     def check_pass(self):
-        if not self.obstacle.passed_player and (self.obstacle.x + self.obstacle.width) < self.player.x:
+        if (self.obstacle.x + self.obstacle.width) < self.player.x:
             self.score += 1
             self.obstacle.passed_player = True
             self.obstacle.reset()
@@ -102,11 +103,35 @@ class Game:
         T = 2 * (self.player.jump_height / self.player.velocity)
         obstacle_final_x = self.obstacle.x - self.obstacle.velocity * T
         if self.player.x < obstacle_final_x:
-            return "Pulo à toa"
+            return "R: Pulo à toa"
         elif self.player.x < obstacle_final_x + self.obstacle.width:
-            return "Colisão"
+            return "R: Colisão"
         else:
-            return "Sucesso"
+            return "R: Sucesso"
+        
+    def predict_jump_result2(self):
+        time_jump = (self.player.jump_height / self.player.velocity) * 2
+        time_to_get_over_obstacle = (self.obstacle.height / self.player.velocity) 
+        time_to_obstacle_level = time_jump - time_to_get_over_obstacle 
+    
+        
+        obstacle_position_in_time_over = self.obstacle.x - (self.obstacle.velocity * time_to_get_over_obstacle)
+        obstacle_position_on_time_level = self.obstacle.x - (self.obstacle.velocity * time_to_obstacle_level)
+        
+        print(self.obstacle.x, obstacle_position_in_time_over)
+        print(self.obstacle.x, obstacle_position_on_time_level)
+        
+        player_with_space = self.player.x + self.player.width
+        
+        
+        if obstacle_position_on_time_level > player_with_space and obstacle_position_in_time_over > player_with_space:
+            return "R: Pulo à toa"
+        elif obstacle_position_in_time_over <= player_with_space:
+            return "R: Colisão 1"
+        elif (obstacle_position_on_time_level + self.obstacle.width) >= self.player.x:
+            return "R: Colisão 2"
+        else:
+            return "R: Sucesso"
 
     def run(self):
         running = True
@@ -118,9 +143,10 @@ class Game:
 
             keys = pygame.key.get_pressed()
 
-            if keys[pygame.K_UP]:
-                print(self.predict_jump_result())
-            self.player.handle_input(keys)
+            if keys[pygame.K_UP] and not self.player.is_jumping:
+                print(self.predict_jump_result2())
+                self.player.handle_input(keys)
+                
             self.player.update()
             self.obstacle.update()
             self.check_collision()

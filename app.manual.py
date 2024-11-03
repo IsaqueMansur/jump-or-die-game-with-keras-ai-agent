@@ -1,10 +1,5 @@
 import pygame
 import random
-import numpy as np
-from tensorflow.keras.models import load_model
-from tensorflow.keras.losses import MeanSquaredError
-import threading
-import time
 
 pygame.init()
 
@@ -75,6 +70,7 @@ class Obstacle:
     def draw(self):
         pygame.draw.rect(screen, (255, 0, 0), self.rect)
         
+        
 class Coin:
     def __init__(self):
         self.width = 20
@@ -101,24 +97,13 @@ class Coin:
 
 
 class Game:
-    def __init__(self, model_path):
+    def __init__(self):
         self.obstacle = Obstacle()
         self.player = Player()
         self.coin = Coin()
         self.score = 0
         self.coins = 0
         self.errors = 0
-        self.done = False
-        self.penalty_collision = -5
-        self.model = load_model(model_path, custom_objects={'mse': MeanSquaredError()})
-        self.action = 0
-        self.lock = threading.Lock()
-        self.model_thread = threading.Thread(target=self.predict_action_loop, daemon=True)
-        self.model_thread.start()
-        self.interval_to_action = 1
-        self.current_frame = 0
-        self.fps = 70
-        self.cpu_sleep = 0.00001
 
     def show_text(self, text, x, y, color=(255, 255, 255)):
         render = font.render(text, True, color)
@@ -131,92 +116,73 @@ class Game:
         self.obstacle.reset()
 
     def check_collision(self):
-        if self.player.rect.colliderect(self.obstacle.rect):
-            self.errors += 1  # Incrementa o contador de erros
+        player_final = self.player.x + self.player.width
+        obstacle_final = self.obstacle.x + self.obstacle.width
+        if obstacle_final < self.player.x: return 0.5
+        if self.player.y >= self.obstacle.y and (player_final >= self.obstacle.x):
+            self.errors += 1  
             self.obstacle.reset()
-            return self.penalty_collision
+            return -5
+        if self.player.y < self.obstacle.y and (obstacle_final <= self.player.x):
+            self.errors += 1
+            self.obstacle.reset()
+            return -5
         return 0
     
     def check_capture_coin(self):
-        if self.player.rect.colliderect(self.coin.rect) and not self.coin.passed_player:
+        player_final = self.player.x + self.player.width
+        coin_final = self.coin.x + self.coin.width
+        if coin_final < self.player.x: return 0
+        if self.player.y <= self.coin.y and (player_final >= self.coin.x):
             self.coins += 1
             self.coin.reset()
             return 20
+        if self.player.y <= self.coin.y and (coin_final <= self.player.x):
+            self.coins += 1
+            self.coin.reset()
         return 0
+     
 
     def check_pass(self):
         if (self.obstacle.x + self.obstacle.width) < self.player.x:
             self.score += 1
             self.obstacle.passed_player = True
             self.obstacle.reset()
-            return 20
+            return 20 
         return 0
-
-    def get_state(self):
-        return np.array([
-            self.obstacle.x / SCREEN_WIDTH,
-            self.obstacle.velocity / 12,
-            int(self.player.on_ground),
-            (self.player.y - self.obstacle.y) / SCREEN_HEIGHT
-        ]).reshape(1, 4)
-
-    def predict_action_loop(self):
-        while True:
-            state = self.get_state()
-            action = self.model.predict(state)
-            with self.lock:
-                self.action = np.argmax(action[0]) 
-            time.sleep(self.cpu_sleep) 
 
     def run(self):
         running = True
         while running:
-            reward = 0
-            action = 0
-            self.current_frame += 1
             screen.fill((0, 0, 0))
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        self.player.jump() 
 
-            # Obtém a ação prevista
-            if self.current_frame % self.interval_to_action == 0:
-                self.current_frame = 0
-                with self.lock:
-                    action = self.action
-
-            # Se a ação for pular (1), faz o jogador pular
-            if action == 1 and not self.player.is_jumping:
-                self.player.jump()
-
-            # Atualizar jogador e obstáculo
             self.player.update()
             self.obstacle.update()
             self.coin.update()
 
-            # Checar colisão e recompensa por passar obstáculo
-            reward += self.check_capture_coin()
-            reward += self.check_collision()
-            reward += self.check_pass()
+            self.check_collision()
+            self.check_capture_coin()
+            self.check_pass()
 
-            # Desenhar elementos do jogo
             self.player.draw()
             self.obstacle.draw()
             self.coin.draw()
-            if self.score:
-                self.show_text(f"Acertos: {self.score} | ({(100 - ((self.errors * 100) / (self.score + self.errors))):.2f}%)", 10, 10)
-                self.show_text(f"Erros: {self.errors} | ({((self.errors * 100) / (self.score + self.errors)):.2f}%)", 10, 50, color=(255, 0, 0))
-            if self.coins:
-                self.show_text(f"Moedas: {self.coins}", 10, 30, color=(255, 255, 0))
-
+            self.show_text(f"Pontos: {self.score}", 10, 10)
+            self.show_text(f"Moedas: {self.coins}", 10, 30, color=(255, 255, 0))
+            self.show_text(f"Erros: {self.errors}", 10, 50, color=(255, 0, 0))  # Exibir erros em vermelho
 
             pygame.display.flip()
-            pygame.time.Clock().tick(self.fps)
+            pygame.time.Clock().tick(70)
 
         pygame.quit()
 
 
 if __name__ == "__main__":
-    model_path = "E:/repositories/jump-or-die-game-with-keras-ai-agent/models-ok/low-rewards-done-per-batch-size-low-gamma.h5"
-    game = Game(model_path)
+    game = Game()
     game.run()

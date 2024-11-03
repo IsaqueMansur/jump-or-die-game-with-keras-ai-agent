@@ -1,5 +1,10 @@
 import pygame
 import random
+import numpy as np
+from tensorflow.keras.models import load_model
+from tensorflow.keras.losses import MeanSquaredError
+import threading
+import time
 
 pygame.init()
 
@@ -11,8 +16,7 @@ pygame.display.set_caption("Pula ou morre")
 font = pygame.font.Font(None, 36)
 
 class Player:
-    def __init__(self, obstacle):
-        self.obstacle = obstacle
+    def __init__(self):
         self.width = 50
         self.height = 50
         self.x = 100
@@ -23,11 +27,11 @@ class Player:
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.on_ground = True 
 
-    def handle_input(self, keys):
-        if keys[pygame.K_UP] and not self.is_jumping and self.on_ground:
+    def jump(self):
+        if self.on_ground:
             self.is_jumping = True
             self.jump_peak = self.y - self.jump_height
-            self.on_ground = False 
+            self.on_ground = False
 
     def update(self):
         if self.is_jumping:
@@ -38,13 +42,13 @@ class Player:
         elif self.y < SCREEN_HEIGHT - self.height - 10:
             self.y += self.velocity
         else:
-            self.on_ground = True 
+            self.on_ground = True
+            self.y = SCREEN_HEIGHT - self.height - 10
 
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
     def draw(self):
         pygame.draw.rect(screen, (0, 255, 0), self.rect)
-
 
 
 class Obstacle:
@@ -73,11 +77,17 @@ class Obstacle:
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, model_path):
         self.obstacle = Obstacle()
-        self.player = Player(self.obstacle)
+        self.player = Player()
         self.score = 0
-        self.clock = pygame.time.Clock()
+        self.done = False
+        self.penalty_collision = -5
+        self.model = load_model(model_path, custom_objects={'mse': MeanSquaredError()})
+        self.action = 0
+        self.lock = threading.Lock()
+        self.model_thread = threading.Thread(target=self.predict_action_loop, daemon=True)
+        self.model_thread.start()
 
     def show_text(self, text, x, y):
         render = font.render(text, True, (255, 255, 255))
@@ -91,77 +101,69 @@ class Game:
     def check_collision(self):
         if self.player.rect.colliderect(self.obstacle.rect):
             self.obstacle.reset()
-            print("Colisão aconteceu")
+            return self.penalty_collision
+        return 0
 
     def check_pass(self):
         if (self.obstacle.x + self.obstacle.width) < self.player.x:
             self.score += 1
             self.obstacle.passed_player = True
             self.obstacle.reset()
-            
-    def predict_jump_result(self):
-        T = 2 * (self.player.jump_height / self.player.velocity)
-        obstacle_final_x = self.obstacle.x - self.obstacle.velocity * T
-        if self.player.x < obstacle_final_x:
-            return "R: Pulo à toa"
-        elif self.player.x < obstacle_final_x + self.obstacle.width:
-            return "R: Colisão"
-        else:
-            return "R: Sucesso"
-        
-    def predict_jump_result2(self):
-        time_jump = (self.player.jump_height / self.player.velocity) * 2
-        time_to_get_over_obstacle = (self.obstacle.height / self.player.velocity) 
-        time_to_obstacle_level = time_jump - time_to_get_over_obstacle 
-    
-        
-        obstacle_position_in_time_over = self.obstacle.x - (self.obstacle.velocity * time_to_get_over_obstacle)
-        obstacle_position_on_time_level = self.obstacle.x - (self.obstacle.velocity * time_to_obstacle_level)
-        
-        print(self.obstacle.x, obstacle_position_in_time_over)
-        print(self.obstacle.x, obstacle_position_on_time_level)
-        
-        player_with_space = self.player.x + self.player.width
-        
-        
-        if obstacle_position_on_time_level > player_with_space and obstacle_position_in_time_over > player_with_space:
-            return "R: Pulo à toa"
-        elif obstacle_position_in_time_over <= player_with_space:
-            return "R: Colisão 1"
-        elif (obstacle_position_on_time_level + self.obstacle.width) >= self.player.x:
-            return "R: Colisão 2"
-        else:
-            return "R: Sucesso"
+            return 20
+        return 0
+
+    def get_state(self):
+        return np.array([
+            self.obstacle.x / SCREEN_WIDTH,
+            self.obstacle.velocity / 12,
+            int(self.player.on_ground),
+            (self.player.y - self.obstacle.y) / SCREEN_HEIGHT
+        ]).reshape(1, 4)
+
+    def predict_action_loop(self):
+        while True:
+            state = self.get_state()
+            action = self.model.predict(state)
+            with self.lock:
+                self.action = np.argmax(action[0])  # Guarda a ação prevista
+            time.sleep(0.1)  # Intervalo para aliviar a CPU
 
     def run(self):
         running = True
         while running:
-            screen.fill((0, 0, 0)) 
+            screen.fill((0, 0, 0))
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
 
-            keys = pygame.key.get_pressed()
+            # Obtém a ação prevista
+            with self.lock:
+                action = self.action
 
-            if keys[pygame.K_UP] and not self.player.is_jumping:
-                print(self.predict_jump_result2())
-                self.player.handle_input(keys)
-                
+            # Se a ação for pular (1), faz o jogador pular
+            if action == 1 and not self.player.is_jumping:
+                self.player.jump()
+
+            # Atualizar jogador e obstáculo
             self.player.update()
             self.obstacle.update()
-            self.check_collision()
-            self.check_pass() 
 
+            # Checar colisão e recompensa por passar obstáculo
+            reward = self.check_collision()
+            reward += self.check_pass()
+
+            # Desenhar elementos do jogo
             self.player.draw()
             self.obstacle.draw()
             self.show_text(f"Pontos: {self.score}", 10, 10)
 
             pygame.display.flip()
-            self.clock.tick(30)
+            pygame.time.Clock().tick(30)
 
         pygame.quit()
 
 
 if __name__ == "__main__":
-    game = Game()
+    model_path = "E:/repositories/agent-dqn-jump-game-script/low-rewards-done-per-batch-size-low-gamma.h5"
+    game = Game(model_path)
     game.run()

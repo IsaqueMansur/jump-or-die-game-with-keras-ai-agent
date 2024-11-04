@@ -117,7 +117,7 @@ class Game:
         self.model_thread.start()
         self.interval_to_action = 1
         self.current_frame = 0
-        self.fps = 100
+        self.fps = 60
         self.cpu_sleep = 0.0001
 
     def show_text(self, text, x, y, color=(255, 255, 255)):
@@ -154,11 +154,13 @@ class Game:
 
     def get_state(self):
         return np.array([
-            self.obstacle.x / SCREEN_WIDTH,
+            (self.player.x - self.obstacle.x) / SCREEN_WIDTH,
             self.obstacle.velocity / 12,
+            (self.player.y - self.obstacle.y) / SCREEN_HEIGHT,
+            (self.player.x - self.coin.x) / SCREEN_WIDTH,
+            self.coin.velocity / 16,
             int(self.player.on_ground),
-            (self.player.y - self.obstacle.y) / SCREEN_HEIGHT
-        ]).reshape(1, 4)
+        ]).reshape(1, 6)
 
     def predict_action_loop(self):
         while True:
@@ -217,6 +219,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    model_path = "E:/repositories/jump-or-die-game-with-keras-ai-agent/models-ok/low-rewards-done-per-batch-size-low-gamma5.h5"
+    model_path = "E:/repositories/jump-or-die-game-with-keras-ai-agent/models-ok/medium-rewards-done-per-batch-size-medium-gamma.h5"
     game = Game(model_path)
     game.run()

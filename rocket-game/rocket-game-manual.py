@@ -3,23 +3,26 @@ import os
 
 pygame.init()
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 750
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
 ROCKET_WIDTH, ROCKET_HEIGHT = 50, 70
-ROCKET_DEFAULT_SPEED = 0.3
+ROCKET_DEFAULT_SPEED = 0.7
+ROCKET_MAX_SPEED = 5
+
 rocket_image = pygame.transform.scale(pygame.image.load(os.path.join('F:/repositories/minigame-python/rocket-game/rocket.png')), (ROCKET_WIDTH, ROCKET_HEIGHT))
 rocket_x, rocket_y = SCREEN_WIDTH // 2 - ROCKET_WIDTH // 2, SCREEN_HEIGHT - ROCKET_HEIGHT
 rocket_speed = ROCKET_DEFAULT_SPEED
 rocket_speed_up = 1.02
-rocket_max_speed = 3.5
 rocket_gravity_down = 1.05
 rocket_gravity_desaceleration = 0.95
 rocket_max_gravity_down = 2.3
 rocket_started_up_on_gravity_down = False
+rocket_win_gravity_down = False
+rocket_start_desacelerattion = False
 
 
 
@@ -53,13 +56,27 @@ try:
                     move_left = False
                 if event.key == pygame.K_d:
                     move_right = False
+                    
+        if rocket_y == (SCREEN_HEIGHT - ROCKET_HEIGHT):
+            rocket_started_up_on_gravity_down = False
+            rocket_win_gravity_down = False
+            rocket_start_desacelerattion = False
+            
+            
                 
                     
         if rocket_y < (SCREEN_HEIGHT - ROCKET_HEIGHT) and not thrust and not rocket_started_up_on_gravity_down:
-            print('here')
-            started_thrust = False
-            rocket_y += rocket_speed
-            rocket_speed *= rocket_gravity_down
+            
+            if rocket_y < (SCREEN_HEIGHT - ROCKET_HEIGHT) and not rocket_start_desacelerattion:
+                rocket_start_desacelerattion = True
+                rocket_speed = ROCKET_DEFAULT_SPEED
+            else:
+                rocket_win_gravity_down = False
+                started_thrust = False
+                rocket_y += rocket_speed
+            
+            if rocket_speed < ROCKET_MAX_SPEED:
+                rocket_speed *= rocket_gravity_down
             
         if rocket_started_up_on_gravity_down:
             if rocket_speed > ROCKET_DEFAULT_SPEED:
@@ -67,14 +84,21 @@ try:
                 rocket_y += rocket_speed
             else:
                 rocket_started_up_on_gravity_down = False
+                rocket_win_gravity_down = True
                 
 
         if thrust and not rocket_started_up_on_gravity_down:
-            rocket_started_up_on_gravity_down = True
+            if not rocket_win_gravity_down:
+                rocket_start_desacelerattion = False
+                rocket_started_up_on_gravity_down = True
+            
             started_thrust = True
                           
             rocket_y -= rocket_speed
-            rocket_speed *= rocket_speed_up     
+            
+            if rocket_speed < ROCKET_MAX_SPEED:
+                rocket_speed *= rocket_speed_up    
+                 
         if move_left:
             rocket_x -= rocket_speed
         if move_right:

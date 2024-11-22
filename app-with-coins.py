@@ -57,7 +57,7 @@ class Obstacle:
         self.height = 50
         self.x = SCREEN_WIDTH
         self.y = SCREEN_HEIGHT - self.height - 10
-        self.velocity = random.randint(6, 10)
+        self.velocity = random.randint(6, 12)
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.passed_player = False
 
@@ -81,7 +81,7 @@ class Coin:
         self.height = 20
         self.x = SCREEN_WIDTH
         self.y = SCREEN_HEIGHT - self.height - 100
-        self.velocity = random.randint(2, 16)
+        self.velocity = random.randint(16, 25)
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.passed_player = False
 
@@ -93,7 +93,7 @@ class Coin:
 
     def reset(self):
         self.x = SCREEN_WIDTH
-        self.velocity = random.randint(2, 16)
+        self.velocity = random.randint(16, 25)
         self.passed_player = False
 
     def draw(self):
@@ -117,8 +117,8 @@ class Game:
         self.model_thread.start()
         self.interval_to_action = 1
         self.current_frame = 0
-        self.fps = 60
-        self.cpu_sleep = 0.0001
+        self.fps = 25
+        self.cpu_sleep = 0
 
     def show_text(self, text, x, y, color=(255, 255, 255)):
         render = font.render(text, True, color)
@@ -129,12 +129,21 @@ class Game:
         self.errors = 0
         self.player.y = SCREEN_HEIGHT - self.player.height - 10
         self.obstacle.reset()
-
+        
     def check_collision(self):
-        if self.player.rect.colliderect(self.obstacle.rect):
-            self.errors += 1  # Incrementa o contador de erros
-            self.obstacle.reset()
-            return self.penalty_collision
+        player_final = self.player.x + self.player.width
+        obstacle_final = self.obstacle.x + self.obstacle.width
+
+        if obstacle_final < self.player.x:
+            return 0.5
+
+        if (self.player.y < self.obstacle.y + self.obstacle.height and
+            self.player.y + self.player.height > self.obstacle.y and
+            player_final > self.obstacle.x and
+            self.player.x < obstacle_final):
+                self.errors += 1 
+                self.obstacle.reset()
+                return self.penalty_collision
         return 0
     
     def check_capture_coin(self):
@@ -158,7 +167,7 @@ class Game:
             self.obstacle.velocity / 12,
             (self.player.y - self.obstacle.y) / SCREEN_HEIGHT,
             (self.player.x - self.coin.x) / SCREEN_WIDTH,
-            self.coin.velocity / 16,
+            self.coin.velocity / 25,
             int(self.player.on_ground),
         ]).reshape(1, 6)
 
@@ -173,7 +182,6 @@ class Game:
     def run(self):
         running = True
         while running:
-            reward = 0
             action = 0
             self.current_frame += 1
             screen.fill((0, 0, 0))
@@ -181,35 +189,32 @@ class Game:
                 if event.type == pygame.QUIT:
                     running = False
 
-            # Obtém a ação prevista
             if self.current_frame % self.interval_to_action == 0:
                 self.current_frame = 0
                 with self.lock:
                     action = self.action
 
-            # Se a ação for pular (1), faz o jogador pular
             if action == 1 and not self.player.is_jumping:
                 self.player.jump()
 
-            # Atualizar jogador e obstáculo
+            self.check_capture_coin()
+            self.check_collision()
+            self.check_pass()
+            
             self.player.update()
             self.obstacle.update()
             self.coin.update()
 
-            # Checar colisão e recompensa por passar obstáculo
-            reward += self.check_capture_coin()
-            reward += self.check_collision()
-            reward += self.check_pass()
-
-            # Desenhar elementos do jogo
             self.player.draw()
             self.obstacle.draw()
             self.coin.draw()
+            
             if self.score:
                 self.show_text(f"Acertos: {self.score} | ({(100 - ((self.errors * 100) / (self.score + self.errors))):.2f}%)", 10, 10)
                 self.show_text(f"Erros: {self.errors} | ({((self.errors * 100) / (self.score + self.errors)):.2f}%)", 10, 50, color=(255, 0, 0))
             if self.coins:
                 self.show_text(f"Moedas: {self.coins}", 10, 30, color=(255, 255, 0))
+            self.show_text(f"Model: {model_path.split('/')[-1]}", 10, 75, color=(120, 120, 220))
 
 
             pygame.display.flip()
@@ -219,6 +224,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    model_path = "E:/repositories/jump-or-die-game-with-keras-ai-agent/models-ok/medium-rewards-done-per-batch-size-medium-gamma.h5"
+    model_path = "F:/repositories/minigame-python/models-ok/model-gm--0.7-mem--2000-relu32-relu64.h5"
     game = Game(model_path)
     game.run()

@@ -117,8 +117,8 @@ class Game:
         self.model_thread.start()
         self.interval_to_action = 1
         self.current_frame = 0
-        self.fps = 100
-        self.cpu_sleep = 0.0001
+        self.fps = 15
+        self.cpu_sleep = 0
 
     def show_text(self, text, x, y, color=(255, 255, 255)):
         render = font.render(text, True, color)
@@ -217,6 +217,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    model_path = "E:/repositories/jump-or-die-game-with-keras-ai-agent/models-ok/low-rewards-done-per-batch-size-low-gamma5.h5"
+    model_path = "F:/repositories/minigame-python/models-ok/low-rewards-done-per-batch-size-low-gamma.h5"
     game = Game(model_path)
     game.run()

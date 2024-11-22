@@ -77,7 +77,7 @@ class Coin:
         self.height = 20
         self.x = SCREEN_WIDTH
         self.y = SCREEN_HEIGHT - self.height - 100
-        self.velocity = random.randint(2, 16)
+        self.velocity = random.randint(9, 25)
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
         self.passed_player = False
 
@@ -89,7 +89,7 @@ class Coin:
 
     def reset(self):
         self.x = SCREEN_WIDTH
-        self.velocity = random.randint(2, 16)
+        self.velocity = random.randint(9, 25)
         self.passed_player = False
 
     def draw(self):
@@ -178,7 +178,7 @@ class Game:
             self.show_text(f"Erros: {self.errors}", 10, 50, color=(255, 0, 0))  # Exibir erros em vermelho
 
             pygame.display.flip()
-            pygame.time.Clock().tick(70)
+            pygame.time.Clock().tick(50)
 
         pygame.quit()
 

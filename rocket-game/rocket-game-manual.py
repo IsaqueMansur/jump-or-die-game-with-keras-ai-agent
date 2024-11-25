@@ -1,14 +1,19 @@
 import pygame
-import os
+import math
 
 class Rocket:
-    def __init__(self, x, y, width, height, image_path):
-        
+    def __init__(self, x, y, width, height):
         self.width = width
         self.height = height
-        self.image = pygame.transform.scale(pygame.image.load(image_path), (self.width, self.height))
         self.x = x
         self.y = y
+
+        # Criar uma superfície para o foguete
+        self.original_image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        self.original_image.fill((255, 0, 0))  # Preencher com vermelho
+        self.image = self.original_image
+
+        self.rect = self.image.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
         
         self.DEFAULT_SPEED = 0.05
         self.SPEED_UP = 1.02
@@ -26,7 +31,7 @@ class Rocket:
         self.move_right = False
         self.thrust = False
         self.started_thrust = False
-        self.noise_angle = 0
+        self.noise_angle = 0  # Ângulo de inclinação em graus
 
     def handle_input(self, event):
         if event.type == pygame.KEYDOWN:
@@ -85,17 +90,31 @@ class Rocket:
                 self.win_gravity_down = True
 
     def handle_horizontal_movement(self):
+        angle_limit = 35
         if self.move_left:
-            self.x -= self.speed
-            self.noise_angle -= 0.5
-            if self.noise_angle == 0:
-                self.noise_angle = 359.5
+            self.noise_angle -= 0.3
+            if self.noise_angle < -angle_limit:
+                self.noise_angle = -angle_limit 
+            
+        elif self.move_right:
+            self.noise_angle += 0.3
+            if self.noise_angle > angle_limit:
+                self.noise_angle = angle_limit 
                 
-        if self.move_right:
-            self.x += self.speed
-            self.noise_angle += 0.5
-            if self.noise_angle == 360:
-                self.noise_angle = 0
+        if self.noise_angle > 0:
+            self.x += (abs(self.noise_angle) / self.MAX_SPEED) 
+        elif self.noise_angle < 0:
+            self.x -= (abs(self.noise_angle) / self.MAX_SPEED)     
+             
+        if not self.move_left and not self.move_right:
+            if self.noise_angle > 0:
+                self.noise_angle -= 0.2
+                if self.noise_angle < 0:
+                    self.noise_angle = 0
+            elif self.noise_angle < 0:
+                self.noise_angle += 0.2
+                if self.noise_angle > 0:
+                    self.noise_angle = 0
 
     def handle_boundary_conditions(self, screen_width, screen_height):
         if self.x < 0:
@@ -123,24 +142,28 @@ class Rocket:
         self.handle_horizontal_movement()
         self.handle_boundary_conditions(screen_width, screen_height)
 
+        self.rect.center = (self.x + self.width // 2, self.y + self.height // 2)
+
     def draw(self, screen):
-        screen.blit(self.image, (self.x, self.y))
+        rotated_image = pygame.transform.rotate(self.original_image, -self.noise_angle)
+        new_rect = rotated_image.get_rect(center=self.rect.center)
+        screen.blit(rotated_image, new_rect.topleft)
 
 class Game:
     def __init__(self):
         pygame.init()
         self.SCREEN_WIDTH, self.SCREEN_HEIGHT = 1000, 750
         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        pygame.display.set_caption("Foguete Inclinado")
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
         self.clock = pygame.time.Clock()
         self.FPS = 60
         self.running = True
 
-        rocket_image_path = os.path.join('F:/repositories/minigame-python/rocket-game/rocket.png')
         rocket_x = self.SCREEN_WIDTH // 2 - 25 
         rocket_y = self.SCREEN_HEIGHT - 47
-        self.rocket = Rocket(rocket_x, rocket_y, 35, 47, rocket_image_path)
+        self.rocket = Rocket(rocket_x, rocket_y, 30, 47)
 
     def run(self):
         try:
@@ -158,7 +181,7 @@ class Game:
                 pygame.display.update()
                 self.clock.tick(self.FPS)
         except Exception as e:
-            print(f"An error occurred: {e}")
+            print(f"Ocorreu um erro: {e}")
         finally:
             pygame.quit()
 

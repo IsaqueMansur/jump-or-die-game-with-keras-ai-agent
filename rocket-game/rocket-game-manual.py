@@ -1,133 +1,167 @@
 import pygame
 import os
 
-pygame.init()
+class Rocket:
+    def __init__(self, x, y, width, height, image_path):
+        
+        self.width = width
+        self.height = height
+        self.image = pygame.transform.scale(pygame.image.load(image_path), (self.width, self.height))
+        self.x = x
+        self.y = y
+        
+        self.DEFAULT_SPEED = 0.05
+        self.SPEED_UP = 1.02
+        self.GRAVITY_DOWN = 1.05
+        self.MAX_SPEED = 5
+        self.GRAVITY_DESACELARATION = 0.965
+        self.MAX_GRAVITY_DOWN_SPEED = 2.3
+        
+        self.speed = 0.7
+        self.started_thrust_on_down = False
+        self.win_gravity_down = False
+        self.request_deceleration = False
+        self.start_deceleration = False
+        self.move_left = False
+        self.move_right = False
+        self.thrust = False
+        self.started_thrust = False
+        self.noise_angle = 0
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 750
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    def handle_input(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w:
+                self.thrust = True
+            if event.key == pygame.K_a:
+                self.move_left = True
+            if event.key == pygame.K_d:
+                self.move_right = True
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_w:
+                self.thrust = False
+            if event.key == pygame.K_a:
+                self.move_left = False
+            if event.key == pygame.K_d:
+                self.move_right = False
 
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-
-ROCKET_WIDTH, ROCKET_HEIGHT = 50, 70
-ROCKET_DEFAULT_SPEED = 0.7
-ROCKET_MAX_SPEED = 5
-
-rocket_image = pygame.transform.scale(pygame.image.load(os.path.join('F:/repositories/minigame-python/rocket-game/rocket.png')), (ROCKET_WIDTH, ROCKET_HEIGHT))
-rocket_x, rocket_y = SCREEN_WIDTH // 2 - ROCKET_WIDTH // 2, SCREEN_HEIGHT - ROCKET_HEIGHT
-rocket_speed = ROCKET_DEFAULT_SPEED
-rocket_speed_up = 1.02
-rocket_gravity_down = 1.05
-rocket_gravity_desaceleration = 0.95
-rocket_max_gravity_down = 2.3
-rocket_started_up_on_gravity_down = False
-rocket_win_gravity_down = False
-rocket_start_desacelerattion = False
-
-
-
-move_left = move_right = thrust = False
-
-started_thrust = False
-
-clock = pygame.time.Clock()
-FPS = 60
-
-def draw_rocket(x, y):
-    screen.blit(rocket_image, (x, y))
-
-try:
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:  
-                if event.key == pygame.K_w:
-                    thrust = True
-                if event.key == pygame.K_a:
-                    move_left = True
-                if event.key == pygame.K_d:
-                    move_right = True
-            elif event.type == pygame.KEYUP:  
-                if event.key == pygame.K_w:
-                    thrust = False
-                if event.key == pygame.K_a:
-                    move_left = False
-                if event.key == pygame.K_d:
-                    move_right = False
-                    
-        if rocket_y == (SCREEN_HEIGHT - ROCKET_HEIGHT):
-            rocket_started_up_on_gravity_down = False
-            rocket_win_gravity_down = False
-            rocket_start_desacelerattion = False
-            
-            
-                
-                    
-        if rocket_y < (SCREEN_HEIGHT - ROCKET_HEIGHT) and not thrust and not rocket_started_up_on_gravity_down:
-            
-            if rocket_y < (SCREEN_HEIGHT - ROCKET_HEIGHT) and not rocket_start_desacelerattion:
-                rocket_start_desacelerattion = True
-                rocket_speed = ROCKET_DEFAULT_SPEED
+    def handle_gravity_down(self, screen_height):
+        if self.y < (screen_height - self.height) and not self.thrust and not self.started_thrust_on_down and not self.request_deceleration:
+            if not self.start_deceleration:
+                self.request_deceleration = True
             else:
-                rocket_win_gravity_down = False
-                started_thrust = False
-                rocket_y += rocket_speed
-            
-            if rocket_speed < ROCKET_MAX_SPEED:
-                rocket_speed *= rocket_gravity_down
-            
-        if rocket_started_up_on_gravity_down:
-            if rocket_speed > ROCKET_DEFAULT_SPEED:
-                rocket_speed *= rocket_gravity_desaceleration
-                rocket_y += rocket_speed
+                self.win_gravity_down = False
+                self.started_thrust = False
+                self.y += self.speed
+                if self.speed < self.MAX_SPEED:
+                    self.speed *= self.GRAVITY_DOWN
+
+    def handle_thrust(self):
+        if self.thrust and not self.started_thrust_on_down:
+            if not self.win_gravity_down:
+                self.request_deceleration = False
+                self.start_deceleration = False
+                self.started_thrust_on_down = True
+            self.started_thrust = True
+            self.y -= self.speed
+            if self.speed < self.MAX_SPEED:
+                self.speed *= self.SPEED_UP
+
+    def handle_deceleration(self):
+        if self.request_deceleration:
+            if self.speed > self.DEFAULT_SPEED:
+                self.speed *= self.GRAVITY_DESACELARATION
+                self.y -= self.speed
             else:
-                rocket_started_up_on_gravity_down = False
-                rocket_win_gravity_down = True
+                self.request_deceleration = False
+                self.start_deceleration = True
+
+    def handle_thrust_on_down(self):
+        if self.started_thrust_on_down:
+            if self.speed > self.DEFAULT_SPEED:
+                self.speed *= self.GRAVITY_DESACELARATION
+                self.y += self.speed
+            else:
+                self.started_thrust_on_down = False
+                self.win_gravity_down = True
+
+    def handle_horizontal_movement(self):
+        if self.move_left:
+            self.x -= self.speed
+            self.noise_angle -= 0.5
+            if self.noise_angle == 0:
+                self.noise_angle = 359.5
                 
+        if self.move_right:
+            self.x += self.speed
+            self.noise_angle += 0.5
+            if self.noise_angle == 360:
+                self.noise_angle = 0
 
-        if thrust and not rocket_started_up_on_gravity_down:
-            if not rocket_win_gravity_down:
-                rocket_start_desacelerattion = False
-                rocket_started_up_on_gravity_down = True
-            
-            started_thrust = True
-                          
-            rocket_y -= rocket_speed
-            
-            if rocket_speed < ROCKET_MAX_SPEED:
-                rocket_speed *= rocket_speed_up    
-                 
-        if move_left:
-            rocket_x -= rocket_speed
-        if move_right:
-            rocket_x += rocket_speed
-            
-            
-        if (rocket_y == SCREEN_HEIGHT - ROCKET_HEIGHT):
-            rocket_speed = ROCKET_DEFAULT_SPEED
+    def handle_boundary_conditions(self, screen_width, screen_height):
+        if self.x < 0:
+            self.x = 0
+        elif self.x > screen_width - self.width:
+            self.x = screen_width - self.width
+        if self.y < 0:
+            self.y = 0
+        elif self.y > screen_height - self.height:
+            self.y = screen_height - self.height
 
-        if rocket_x < 0:
-            rocket_x = 0
-        elif rocket_x > SCREEN_WIDTH - ROCKET_WIDTH:
-            rocket_x = SCREEN_WIDTH - ROCKET_WIDTH
-        if rocket_y < 0:
-            rocket_y = 0
-        elif rocket_y > SCREEN_HEIGHT - ROCKET_HEIGHT:
-            rocket_y = SCREEN_HEIGHT - ROCKET_HEIGHT
+    def reset_speed_on_ground(self, screen_height):
+        if self.y == (screen_height - self.height):
+            self.speed = self.DEFAULT_SPEED
+            self.started_thrust_on_down = False
+            self.win_gravity_down = False
+            self.request_deceleration = False
 
-        screen.fill(BLACK)
+    def update(self, screen_width, screen_height):
+        self.reset_speed_on_ground(screen_height)
+        self.handle_deceleration()
+        self.handle_gravity_down(screen_height)
+        self.handle_thrust_on_down()
+        self.handle_thrust()
+        self.handle_horizontal_movement()
+        self.handle_boundary_conditions(screen_width, screen_height)
 
-        draw_rocket(rocket_x, rocket_y)
+    def draw(self, screen):
+        screen.blit(self.image, (self.x, self.y))
 
-        pygame.display.update()
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.SCREEN_WIDTH, self.SCREEN_HEIGHT = 1000, 750
+        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        self.WHITE = (255, 255, 255)
+        self.BLACK = (0, 0, 0)
+        self.clock = pygame.time.Clock()
+        self.FPS = 60
+        self.running = True
 
-        clock.tick(FPS)
+        rocket_image_path = os.path.join('F:/repositories/minigame-python/rocket-game/rocket.png')
+        rocket_x = self.SCREEN_WIDTH // 2 - 25 
+        rocket_y = self.SCREEN_HEIGHT - 47
+        self.rocket = Rocket(rocket_x, rocket_y, 35, 47, rocket_image_path)
 
-except Exception as e:
-    print(f"An error occurred: {e}")
+    def run(self):
+        try:
+            while self.running:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                    else:
+                        self.rocket.handle_input(event)
 
-finally:
-    pygame.quit()
-    input("Press enter to exit...")
+                self.rocket.update(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
+
+                self.screen.fill(self.BLACK)
+                self.rocket.draw(self.screen)
+                pygame.display.update()
+                self.clock.tick(self.FPS)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            pygame.quit()
+
+if __name__ == "__main__":
+    game = Game()
+    game.run()

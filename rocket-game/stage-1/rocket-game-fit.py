@@ -1,5 +1,72 @@
 import pygame
-import math
+import random
+import numpy as np
+from collections import deque
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+import os
+
+
+class DQNAgent:
+    def __init__(self): 
+        self.model = Sequential([
+            Dense(32, activation='relu', input_shape=(7,)),
+            Dense(32, activation='relu'),
+            Dense(64, activation='relu'),
+            Dense(3, activation='linear')
+        ])
+        self.model.compile(optimizer='adam', loss='mse')
+        self.memory = deque(maxlen=2000)
+        self.epsilon = 1.0
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.999
+        self.gamma = 0.95
+        self.model_name = f"rocket-model-gm--{self.gamma}-mem--{self.memory.maxlen}--32-32-64"
+        
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+        
+    def act(self, state):
+        if np.random.rand() <= self.epsilon:
+            return random.randint(0, 2)
+        q_values = self.model.predict(np.array([state]), verbose=0)
+        return np.argmax(q_values[0])
+    
+    def replay(self, batch_size=32):
+        if len(self.memory) < batch_size:
+            return
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward
+            if not done:
+                target += self.gamma * np.amax(self.model.predict(np.array([next_state]), verbose=0)[0])
+            target_f = self.model.predict(np.array([state]), verbose=0)
+            target_f[0][action] = target
+            self.model.fit(np.array([state]), target_f, epochs=3, verbose=0)
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+        print(f"Epsilon: {self.epsilon}")
+        
+    def save_model(self):
+        current_path = os.path.abspath(os.path.dirname(__file__))
+        self.model.save(f"{current_path}/{self.model_name}.h5")
+
+        
+
+
+
+class Target:
+    def __init__(self, x, y, width, height):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.color = (0, 255, 0) 
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect)
+        
+    def calculate_distance_to_rocket(self, rocket_rect):
+        return abs(self.rect.centerx - rocket_rect.centerx) + abs(self.rect.centery - rocket_rect.centery)
+        
 
 class Rocket:
     def __init__(self, x, y, width, height):
@@ -8,14 +75,13 @@ class Rocket:
         self.x = x
         self.y = y
 
-        # Criar uma superfície para o foguete
         self.original_image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        self.original_image.fill((255, 0, 0))  # Preencher com vermelho
+        self.original_image.fill((255, 0, 0)) 
         self.image = self.original_image
 
-        self.rect = self.image.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
+        self.rocket_rect = self.image.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
         
-        self.DEFAULT_SPEED = 0.05
+        self.DEFAULT_SPEED = 1
         self.SPEED_UP = 1.02
         self.GRAVITY_DOWN = 1.05
         self.MAX_SPEED = 5
@@ -31,23 +97,19 @@ class Rocket:
         self.move_right = False
         self.thrust = False
         self.started_thrust = False
-        self.noise_angle = 0  # Ângulo de inclinação em graus
+        self.noise_angle = 0 
 
-    def handle_input(self, event):
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_w:
-                self.thrust = True
-            if event.key == pygame.K_a:
-                self.move_left = True
-            if event.key == pygame.K_d:
-                self.move_right = True
-        elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_w:
-                self.thrust = False
-            if event.key == pygame.K_a:
-                self.move_left = False
-            if event.key == pygame.K_d:
+    def handle_input(self, action):
+            if action == 0:
+                self.thrust = not self.thrust
                 self.move_right = False
+                self.move_left = False
+            if action == 1:
+                self.move_left = True
+                self.move_right = False
+            if action == 2:
+                self.move_right = True
+                self.move_left = False
 
     def handle_gravity_down(self, screen_height):
         if self.y < (screen_height - self.height) and not self.thrust and not self.started_thrust_on_down and not self.request_deceleration:
@@ -142,49 +204,88 @@ class Rocket:
         self.handle_horizontal_movement()
         self.handle_boundary_conditions(screen_width, screen_height)
 
-        self.rect.center = (self.x + self.width // 2, self.y + self.height // 2)
+        self.rocket_rect.center = (self.x + self.width // 2, self.y + self.height // 2)
 
     def draw(self, screen):
         rotated_image = pygame.transform.rotate(self.original_image, -self.noise_angle)
-        new_rect = rotated_image.get_rect(center=self.rect.center)
+        new_rect = rotated_image.get_rect(center=self.rocket_rect.center)
         screen.blit(rotated_image, new_rect.topleft)
 
 class Game:
     def __init__(self):
         pygame.init()
         self.SCREEN_WIDTH, self.SCREEN_HEIGHT = 1000, 750
-        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        
+        """ self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
         pygame.display.set_caption("Foguete Inclinado")
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
         self.clock = pygame.time.Clock()
-        self.FPS = 60
+        self.FPS = 60 """
         self.running = True
 
         rocket_x = self.SCREEN_WIDTH // 2 - 25 
         rocket_y = self.SCREEN_HEIGHT - 47
+        
+        target_x = random.randint(30, self.SCREEN_WIDTH - 30)
+        target_y = random.randint(30, self.SCREEN_HEIGHT - 30)
+        
         self.rocket = Rocket(rocket_x, rocket_y, 30, 47)
+        self.target = Target(target_x, target_y, 10, 10)
+        
+        self.agent = DQNAgent()
+        self.ACTIONS_NUMBER_TO_CALLBACK_FIT = 100
 
-    def run(self):
+    def run(self, episodes=100000):
+        action_number = 0
         try:
             while self.running:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        self.running = False
-                    else:
-                        self.rocket.handle_input(event)
-
+                action_number += 1
+                state = self.get_state()
+                action = self.agent.act(state)
+                distance_to_target = self.target.calculate_distance_to_rocket(self.rocket.rocket_rect)
+                reward = (2000 - distance_to_target) / 100
+                self.rocket.handle_input(action)
+                
                 self.rocket.update(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
 
-                self.screen.fill(self.BLACK)
+                """ self.screen.fill(self.BLACK)
                 self.rocket.draw(self.screen)
+                self.target.draw(self.screen)
                 pygame.display.update()
-                self.clock.tick(self.FPS)
+                self.clock.tick(self.FPS) """
+                
+                
+                next_state = self.get_state()
+                done = self.target.calculate_distance_to_rocket == 0
+                
+                self.agent.remember(state, action, reward, next_state, done)
+
+                if action_number % self.ACTIONS_NUMBER_TO_CALLBACK_FIT == 0:
+                    self.agent.replay()
+                    print(f"Distância: {distance_to_target}")
+                
+                if action_number % 1000 == 0:
+                    self.agent.save_model()
+                
         except Exception as e:
             print(f"Ocorreu um erro: {e}")
         finally:
             pygame.quit()
+            
+    def get_state(self):
+        rocket_distance_to_target = self.target.calculate_distance_to_rocket(self.rocket.rocket_rect)
+        return np.array(
+            [
+                rocket_distance_to_target, 
+                self.rocket.noise_angle, 
+                self.rocket.x,
+                self.rocket.y,
+                self.rocket.thrust,
+                self.rocket.start_deceleration,
+                self.rocket.started_thrust_on_down
+            ])
 
 if __name__ == "__main__":
     game = Game()
-    game.run()
+    game.run(100000)

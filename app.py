@@ -217,6 +217,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    model_path = "F:/repositories/minigame-python/models-ok/low-rewards-done-per-batch-size-low-gamma.h5"
+    model_path = "c:/repositories/jump-or-die-game/models-ok/low-rewards-done-per-batch-size-low-gamma.h5"
     game = Game(model_path)
     game.run()

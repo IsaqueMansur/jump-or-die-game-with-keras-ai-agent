@@ -224,6 +224,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    model_path = "F:/repositories/minigame-python/models-ok/model-gm--0.7-mem--2000-relu32-relu64.h5"
+    model_path = "c:/repositories/jump-or-die-game/models-ok/model-gm--0.7-mem--2000-relu32-relu64.h5"
     game = Game(model_path)
     game.run()
